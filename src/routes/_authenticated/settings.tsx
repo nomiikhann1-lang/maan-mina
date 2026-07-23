@@ -10,6 +10,7 @@ import {
 import { useCoupleSettings } from "@/lib/coupleSettings";
 import { THEMES } from "@/lib/theme";
 import { compressImage, extensionForMime, uploadCustomSticker } from "@/lib/media";
+import { isSoundEnabled, playSentChime, setSoundEnabled } from "@/lib/sound";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: SettingsPage,
@@ -22,6 +23,7 @@ function SettingsPage() {
   const navigate = useNavigate();
   const { settings, setTheme, setAnniversaryDate, setCountdown } = useCoupleSettings();
   const [pushOn, setPushOn] = useState(false);
+  const [soundOn, setSoundOn] = useState(() => isSoundEnabled());
   const [pushBusy, setPushBusy] = useState(false);
   const [pushError, setPushError] = useState<string | null>(null);
   const supported = pushSupported();
@@ -184,6 +186,36 @@ function SettingsPage() {
             </button>
           </div>
           {pushError && <div className="px-4 pb-4 text-xs text-destructive">{pushError}</div>}
+        </div>
+
+        <div className="mt-4 overflow-hidden rounded-3xl border border-border/60 bg-card/80">
+          <div className="flex items-center justify-between px-4 py-4">
+            <div className="pr-4">
+              <div className="text-sm font-medium text-foreground">Sound</div>
+              <p className="mt-0.5 text-xs text-muted-foreground">
+                A soft chime when messages are sent, received, or surprises arrive
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                const next = !soundOn;
+                setSoundOn(next);
+                setSoundEnabled(next);
+                if (next) playSentChime();
+              }}
+              aria-pressed={soundOn}
+              className={`relative h-7 w-12 shrink-0 rounded-full transition-colors ${
+                soundOn ? "bg-primary" : "bg-secondary"
+              }`}
+            >
+              <span
+                className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
+                  soundOn ? "translate-x-[22px]" : "translate-x-[2px]"
+                }`}
+              />
+            </button>
+          </div>
         </div>
 
         <div className="mt-4 overflow-hidden rounded-3xl border border-border/60 bg-card/80 px-4 py-4">

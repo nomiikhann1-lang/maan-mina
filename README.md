@@ -211,3 +211,24 @@ Run `supabase/migrations/20260719120000_widgets_stickers_playlist.sql` (after th
 ### Honest scope note on songs
 
 This is link-based sharing, not a search — there's no "search for a song by name" box, because that would need a Spotify/YouTube API key and OAuth setup, which is a bigger, separate piece of infrastructure. Pasting a link you already have (from the Spotify/YouTube app's share button, for instance) works great; typing just a song title won't do anything. Let me know if you'd want proper search added later — it's doable, just needs API credentials from you first.
+
+## Fifth pass — bug fixes + fun stuff
+
+### New migration
+Run `supabase/migrations/20260722090000_surprise_type.sql` (after the four earlier ones). Adds `surprise` as a message type.
+
+### Bug fixes
+- **12-hour time** — message timestamps now always show AM/PM regardless of device locale.
+- **Autoscroll** — now WhatsApp-style: smooth-scrolls to new messages only when you're already near the bottom or it's your own message; if you're reading history, it leaves you alone and shows a "N new messages ↓" pill instead of yanking you down.
+- **Swipe-to-reply** — swipe any bubble right to reply, WhatsApp-style, with a reveal icon and rubber-band resistance. Properly disambiguated from long-press-to-react and double-tap-to-heart on the same bubble.
+
+### New: fun stuff
+- **Sunflower growth widget** (home screen) — grows through 4 stages (seed → sprout → bud → full bloom) based on how many messages you've sent each other this week. Naturally resets every Monday since it's always counting *this* week.
+- **Secret surprise gesture** — tap the sunflower growth widget 3× quickly to send a surprise: a full-screen live burst of floating petals or confetti hearts on your partner's screen if they're online, plus a persisted message + push notification either way so it's never missed.
+- **Weather-synced background** *(needs a free API key)* — subtle animated overlay in the chat (soft rain, drifting snow, sun rays, moving clouds) based on each person's real local weather, plus a small badge on the home screen. Get a free key at openweathermap.org (takes ~2 minutes, no credit card), then add `VITE_OPENWEATHER_API_KEY` to your Vercel env vars. Without the key, this feature just silently does nothing — no errors, no broken UI.
+- **Lo-fi cassette voice filter** — a 📼 toggle next to the mic. When on, your voice note gets a warm lowpass filter, gentle saturation, and subtle pitch wobble baked in before upload (processed entirely on-device, no server involved).
+- **Daily prompt** — a new gentle question each day ("What made you smile today?"), same question for both of you since it's picked deterministically by date. Dismissible, reappears fresh the next day. Answers render in a visually distinct bubble style.
+- **Sound design** — soft synthesized chime on send/receive/surprise (no audio files shipped — generated via Web Audio oscillators). Toggle in Settings → Sound.
+
+### Honest scope note
+Weather-sync is the one feature here that depends on a third-party API key from you, same situation as the earlier VAPID push keys — I can't provision that on your behalf. Everything else in this batch works out of the box with just the one new migration.

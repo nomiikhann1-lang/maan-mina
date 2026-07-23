@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { greetingFor } from "@/lib/greeting";
 import { previewForMessage } from "@/lib/messagePreview";
@@ -7,6 +7,10 @@ import { formatRelativeTime } from "@/lib/time";
 import { useCoupleSettings } from "@/lib/coupleSettings";
 import { DaysTogetherWidget, UpcomingCountdownWidget } from "@/components/chat/CountdownWidget";
 import { PokeButtons } from "@/components/chat/PokeButtons";
+import { SunflowerGrowth, stageForCount } from "@/components/chat/SunflowerGrowth";
+import { sendSurprise } from "@/lib/surprise";
+import { useWeather } from "@/hooks/useWeather";
+import { WEATHER_LABEL } from "@/lib/weather";
 
 export const Route = createFileRoute("/_authenticated/home")({
   component: HomePage,
@@ -21,44 +25,94 @@ type Profile = {
 
 type LastMessage = {
   content: string;
-  type: "text" | "image" | "voice" | "video" | "sticker" | "song";
+  type: "text" | "image" | "voice" | "video" | "sticker" | "song" | "surprise";
   created_at: string;
   sender_id: string;
   media_meta: { urls?: string[] } | null;
 };
 
+function startOfWeekIso(): string {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday
+  const diffToMonday = (day + 6) % 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+  return monday.toISOString();
+}
+
 function HomePage() {
   const { user } = Route.useRouteContext();
   const { settings } = useCoupleSettings();
+  const weather = useWeather();
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [lastMessage, setLastMessage] = useState<LastMessage | null>(null);
   const [loaded, setLoaded] = useState(false);
+  const [weeklyCount, setWeeklyCount] = useState(0);
+  const [growthJustGrew, setGrowthJustGrew] = useState(false);
+  const prevStageRef = useRef<number | null>(null);
+  const tapTimesRef = useRef<number[]>([]);
+  const [surpriseSent, setSurpriseSent] = useState(false);
 
   const me = profiles[user.id];
   const other = Object.values(profiles).find((p) => p.id !== user.id);
   const greeting = greetingFor(me?.display_name ?? "friend");
 
   async function refresh() {
-    const [{ data: profs }, { data: msgs }] = await Promise.all([
+    const [{ data: profs }, { data: msgs }, { count }] = await Promise.all([
       supabase.from("profiles").select("id, display_name, avatar_url, last_active_at"),
       supabase
         .from("messages")
         .select("content, type, created_at, sender_id, media_meta")
         .order("created_at", { ascending: false })
         .limit(1),
+      supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startOfWeekIso()),
     ]);
     setProfiles(Object.fromEntries((profs ?? []).map((p) => [p.id, p as Profile])));
     setLastMessage((msgs && (msgs[0] as LastMessage)) ?? null);
+    setWeeklyCount(count ?? 0);
     setLoaded(true);
   }
 
   useEffect(() => {
     void refresh();
+    const channel = supabase
+      .channel("home-live")
+      .on(
+        "postgres_changes",
+        { event: "INSERT", schema: "public", table: "messages" },
+        () => void refresh(),
+      )
+      .subscribe();
+    return () => {
+      supabase.removeChannel(channel);
+    };
   }, []);
+
+  useEffect(() => {
+    const stage = stageForCount(weeklyCount);
+    if (prevStageRef.current !== null && stage > prevStageRef.current) {
+      setGrowthJustGrew(true);
+      window.setTimeout(() => setGrowthJustGrew(false), 700);
+    }
+    prevStageRef.current = stage;
+  }, [weeklyCount]);
 
   async function sendPoke(content: string) {
     await supabase.from("messages").insert({ sender_id: user.id, content, type: "text" });
     void refresh();
+  }
+
+  function handleGrowthTap() {
+    const now = Date.now();
+    tapTimesRef.current = [...tapTimesRef.current.filter((t) => now - t < 900), now];
+    if (tapTimesRef.current.length >= 3) {
+      tapTimesRef.current = [];
+      void sendSurprise(user.id, Math.random() < 0.5 ? "petals" : "confetti-hearts");
+      setSurpriseSent(true);
+      window.setTimeout(() => setSurpriseSent(false), 1800);
+    }
   }
 
   const preview = lastMessage ? previewForMessage(lastMessage) : "No messages yet — say hi!";
@@ -85,7 +139,15 @@ function HomePage() {
             <span className="mr-2">{greeting.emoji}</span>
             {greeting.text}
           </div>
-          <p className="mt-0.5 text-xs text-muted-foreground">a cozy corner just for two</p>
+          <p className="mt-0.5 flex items-center gap-1.5 text-xs text-muted-foreground">
+            a cozy corner just for two
+            {weather && (
+              <span className="text-muted-foreground/70">
+                · {weather.emoji} {Math.round(weather.tempC)}°{" "}
+                <span className="hidden sm:inline">{WEATHER_LABEL[weather.condition]}</span>
+              </span>
+            )}
+          </p>
         </div>
         <div className="flex flex-col items-end gap-1.5">
           <div className="flex flex-wrap items-center justify-end gap-1.5">
@@ -139,6 +201,19 @@ function HomePage() {
                 Open chat <ArrowIcon />
               </div>
             </Link>
+
+            <div className="relative">
+              <SunflowerGrowth
+                weeklyCount={weeklyCount}
+                justGrew={growthJustGrew}
+                onTap={handleGrowthTap}
+              />
+              {surpriseSent && (
+                <span className="pop-in absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-petal">
+                  Surprise sent 💫
+                </span>
+              )}
+            </div>
 
             <div className="w-full max-w-sm">
               <PokeButtons onSend={sendPoke} />

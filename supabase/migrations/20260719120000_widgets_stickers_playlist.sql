@@ -7,15 +7,17 @@ ALTER TABLE public.couple_settings ADD COLUMN countdown_date DATE;
 ALTER TABLE public.couple_settings ADD COLUMN countdown_label TEXT;
 
 -- ── themes: replace the old set with the requested one ─────────────────
-ALTER TABLE public.couple_settings DROP CONSTRAINT couple_settings_theme_check;
-ALTER TABLE public.couple_settings
-  ADD CONSTRAINT couple_settings_theme_check
-  CHECK (theme IN ('light', 'dark', 'pink', 'blue', 'forest', 'galaxy', 'minimal'));
-
+-- Remap existing values BEFORE swapping the constraint — the new CHECK
+-- would otherwise reject any row still holding an old theme name.
 UPDATE public.couple_settings SET theme = 'light' WHERE theme = 'sunflower';
 UPDATE public.couple_settings SET theme = 'pink' WHERE theme = 'blossom';
 UPDATE public.couple_settings SET theme = 'blue' WHERE theme = 'ocean';
 UPDATE public.couple_settings SET theme = 'galaxy' WHERE theme = 'lavender';
+
+ALTER TABLE public.couple_settings DROP CONSTRAINT couple_settings_theme_check;
+ALTER TABLE public.couple_settings
+  ADD CONSTRAINT couple_settings_theme_check
+  CHECK (theme IN ('light', 'dark', 'pink', 'blue', 'forest', 'galaxy', 'minimal'));
 
 ALTER TABLE public.couple_settings ALTER COLUMN theme SET DEFAULT 'light';
 

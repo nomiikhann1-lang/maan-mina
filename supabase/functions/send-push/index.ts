@@ -32,7 +32,7 @@ type MessageRow = {
   id: string;
   sender_id: string;
   content: string;
-  type: "text" | "image" | "voice" | "video" | "sticker" | "song";
+  type: "text" | "image" | "voice" | "video" | "sticker" | "song" | "surprise";
   media_meta: { urls?: string[] } | null;
 };
 
@@ -50,6 +50,8 @@ function previewFor(message: MessageRow) {
       return "✨ Sent a sticker";
     case "song":
       return "🎵 Shared a song";
+    case "surprise":
+      return "💫 Sent you a surprise";
     default:
       return message.content.length > 120 ? message.content.slice(0, 117) + "…" : message.content;
   }

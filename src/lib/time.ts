@@ -14,3 +14,12 @@ export function formatRelativeTime(iso: string): string {
   if (diffDay < 7) return `${diffDay}d ago`;
   return new Date(iso).toLocaleDateString([], { month: "short", day: "numeric" });
 }
+
+/**
+ * Always renders as h:mm AM/PM, regardless of the device's locale/region
+ * settings — some locales default toLocaleTimeString to 24-hour even with
+ * hour: "2-digit", so hour12 is set explicitly rather than left to chance.
+ */
+export function formatClockTime(iso: string): string {
+  return new Date(iso).toLocaleTimeString([], { hour: "numeric", minute: "2-digit", hour12: true });
+}
