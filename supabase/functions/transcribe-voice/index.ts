@@ -1,31 +1,39 @@
 // Supabase Edge Function: transcribe-voice
-//
-// Pipeline: fetch voice note -> Groq Whisper (transcribes audio into Urdu script)
-// -> Groq Llama 3.3 (transliterates Urdu script into casual Roman Urdu).
-//
-// Deploy with:
-//   supabase functions deploy transcribe-voice
-//
-// Secret required:
-//   supabase secrets set GROQ_API_KEY="gsk_..."
 
-const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY") ?? "";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  // 1. Handle browser/app CORS preflight checks
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
+
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders,
+    });
+  }
+
+  // 2. Fetch the API key dynamically per request
+  const GROQ_API_KEY = Deno.env.get("GROQ_API_KEY");
 
   if (!GROQ_API_KEY) {
     return new Response(
       JSON.stringify({ error: "Transcription isn't configured yet." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response("Unauthorized", { status: 401 });
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: corsHeaders,
+    });
   }
 
   const body = await req.json().catch(() => null);
@@ -33,19 +41,22 @@ Deno.serve(async (req) => {
   if (!audioUrl) {
     return new Response(
       JSON.stringify({ error: "Missing audio_url" }),
-      { status: 400, headers: { "Content-Type": "application/json" } }
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 
   try {
-    // 1. Fetch voice note audio file
+    // 3. Fetch voice note audio file
     const audioRes = await fetch(audioUrl);
     if (!audioRes.ok) throw new Error("Couldn't fetch the voice note");
     const audioBlob = await audioRes.blob();
 
-    // 2. Transcribe using Groq Whisper
+    // 4. Prepare file for Groq Whisper
     const form = new FormData();
-    form.append("file", audioBlob, "voice-note.wav");
+    const audioFile = new File([audioBlob], "voice-note.m4a", {
+      type: audioBlob.type || "audio/m4a",
+    });
+    form.append("file", audioFile);
     form.append("model", "whisper-large-v3");
     form.append("language", "ur");
 
@@ -71,11 +82,11 @@ Deno.serve(async (req) => {
     if (!rawText.trim()) {
       return new Response(
         JSON.stringify({ transcript: "" }),
-        { status: 200, headers: { "Content-Type": "application/json" } }
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // 3. Transliterate Urdu script into casual Roman Urdu using Groq Llama 3.3
+    // 5. Transliterate to Roman Urdu using Groq Llama 3.3
     const romanizeRes = await fetch("https://api.groq.com/openai/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -105,15 +116,15 @@ Deno.serve(async (req) => {
     const transcript: string =
       romanizeData?.choices?.[0]?.message?.content?.trim() ?? rawText;
 
-    return new Response(JSON.stringify({ transcript }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
+    return new Response(
+      JSON.stringify({ transcript }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: any) {
     console.error("transcribe-voice failed:", err);
     return new Response(
-      JSON.stringify({ error: "Couldn't transcribe that voice note." }),
-      { status: 500, headers: { "Content-Type": "application/json" } }
+      JSON.stringify({ error: err.message || "Couldn't transcribe that voice note." }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   }
 });
