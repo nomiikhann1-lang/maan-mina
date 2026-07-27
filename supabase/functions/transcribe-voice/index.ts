@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
   }
 
   const body = await req.json().catch(() => null);
-  const audioUrl: string | undefined = body?.audio_url;
+  let audioUrl: string | undefined = body?.audio_url || body?.audioUrl || body?.url;
 
   if (!audioUrl) {
     return new Response(
@@ -43,14 +43,23 @@ Deno.serve(async (req) => {
     );
   }
 
+  // Auto-resolve relative paths to full Supabase Storage URLs
+  if (!audioUrl.startsWith("http://") && !audioUrl.startsWith("https://")) {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "";
+    const cleanPath = audioUrl.startsWith("/") ? audioUrl.slice(1) : audioUrl;
+    audioUrl = `${supabaseUrl}/${cleanPath}`;
+  }
+
+  console.log("Attempting to fetch audio from URL:", audioUrl);
+
   try {
-    // 1. Fetch the voice note (forward Authorization header in case the bucket is private)
+    // 1. Fetch the voice note
     const audioRes = await fetch(audioUrl, {
       headers: authHeader ? { Authorization: authHeader } : {},
     });
 
     if (!audioRes.ok) {
-      console.error(`Failed to download audio from ${audioUrl}. Status: ${audioRes.status} ${audioRes.statusText}`);
+      console.error(`Failed fetching ${audioUrl}. Status: ${audioRes.status}`);
       throw new Error(`Couldn't fetch voice note (HTTP ${audioRes.status})`);
     }
 
