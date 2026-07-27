@@ -9,12 +9,22 @@ export const WEATHER_LABEL: Record<WeatherCondition, string> = {
   windy: "windy",
 };
 
-export type WeatherReading = { condition: WeatherCondition; tempC: number; city: string };
+export type WeatherReading = {
+  condition: WeatherCondition;
+  tempC: number;
+  city: string;
+  isDay: boolean;
+};
 
-/** Fixed home cities — Mina in Karachi, Maan in Islamabad. No geolocation, no API key. */
+/**
+ * Fixed home locations — no geolocation, no API key. Coordinates are my
+ * best estimate for these specific neighborhoods (not a live geocoding
+ * lookup), so they're close but not necessarily pinpoint-exact — close
+ * enough to reflect real local conditions rather than a city-wide average.
+ */
 const CITY_BY_EMAIL: Record<string, { name: string; lat: number; lon: number }> = {
-  "maan@chat.com": { name: "Islamabad", lat: 33.6844, lon: 73.0479 },
-  "mina@chat.com": { name: "Karachi", lat: 24.8607, lon: 67.0011 },
+  "maan@chat.com": { name: "Bin Qasim Town, Karachi", lat: 24.7736, lon: 67.3406 },
+  "mina@chat.com": { name: "DHA, Islamabad", lat: 33.5651, lon: 73.1131 },
 };
 
 function mapWeatherCode(code: number, windKph: number): WeatherCondition {
@@ -43,15 +53,16 @@ export async function fetchWeather(
   if (!city) return null;
   try {
     const res = await fetch(
-      `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,weather_code,wind_speed_10m&timezone=auto`,
+      `https://api.open-meteo.com/v1/forecast?latitude=${city.lat}&longitude=${city.lon}&current=temperature_2m,weather_code,wind_speed_10m,is_day&timezone=auto`,
     );
     if (!res.ok) return null;
     const data = await res.json();
     const code = data?.current?.weather_code;
     const tempC = data?.current?.temperature_2m;
     const windKph = data?.current?.wind_speed_10m ?? 0;
+    const isDay = data?.current?.is_day !== 0;
     if (typeof code !== "number" || typeof tempC !== "number") return null;
-    return { condition: mapWeatherCode(code, windKph), tempC, city: city.name };
+    return { condition: mapWeatherCode(code, windKph), tempC, city: city.name, isDay };
   } catch {
     return null;
   }

@@ -62,7 +62,7 @@ export type CustomSticker = {
   id: string;
   image_url: string;
   label: string | null;
-  ownerName: "Maan" | "Mina" | "Ours";
+  ownerName: "Maan" | "Mina";
 };
 export type StickerPick = { kind: "builtin"; id: StickerId } | { kind: "custom"; url: string };
 

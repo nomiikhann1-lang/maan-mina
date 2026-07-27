@@ -6,6 +6,8 @@ import { previewForMessage } from "@/lib/messagePreview";
 import { formatRelativeTime } from "@/lib/time";
 import { useCoupleSettings } from "@/lib/coupleSettings";
 import { DaysTogetherWidget, UpcomingCountdownWidget } from "@/components/chat/CountdownWidget";
+import { StreakBadge } from "@/components/chat/StreakBadge";
+import { computeStreak } from "@/lib/streak";
 import { PokeButtons } from "@/components/chat/PokeButtons";
 import { SunflowerGrowth, stageForCount } from "@/components/chat/SunflowerGrowth";
 import { sendSurprise } from "@/lib/surprise";
@@ -49,6 +51,7 @@ function HomePage() {
   const [lastMessage, setLastMessage] = useState<LastMessage | null>(null);
   const [loaded, setLoaded] = useState(false);
   const [weeklyCount, setWeeklyCount] = useState(0);
+  const [streak, setStreak] = useState(0);
   const [growthJustGrew, setGrowthJustGrew] = useState(false);
   const prevStageRef = useRef<number | null>(null);
   const tapTimesRef = useRef<number[]>([]);
@@ -59,7 +62,10 @@ function HomePage() {
   const greeting = greetingFor(me?.display_name ?? "friend");
 
   async function refresh() {
-    const [{ data: profs }, { data: msgs }, { count }] = await Promise.all([
+    const streakWindowStart = new Date();
+    streakWindowStart.setDate(streakWindowStart.getDate() - 40);
+
+    const [{ data: profs }, { data: msgs }, { count }, { data: recentDays }] = await Promise.all([
       supabase.from("profiles").select("id, display_name, avatar_url, last_active_at"),
       supabase
         .from("messages")
@@ -70,10 +76,15 @@ function HomePage() {
         .from("messages")
         .select("id", { count: "exact", head: true })
         .gte("created_at", startOfWeekIso()),
+      supabase
+        .from("messages")
+        .select("created_at")
+        .gte("created_at", streakWindowStart.toISOString()),
     ]);
     setProfiles(Object.fromEntries((profs ?? []).map((p) => [p.id, p as Profile])));
     setLastMessage((msgs && (msgs[0] as LastMessage)) ?? null);
     setWeeklyCount(count ?? 0);
+    setStreak(computeStreak((recentDays ?? []).map((r) => r.created_at)));
     setLoaded(true);
   }
 
@@ -124,7 +135,7 @@ function HomePage() {
 
   return (
     <div className="relative flex min-h-[100dvh] flex-col overflow-hidden bg-background">
-      <WeatherOverlay condition={weather?.condition ?? null} />
+      <WeatherOverlay condition={weather?.condition ?? null} isDay={weather?.isDay ?? true} />
       <div aria-hidden className="pointer-events-none absolute inset-0 select-none overflow-hidden">
         <div className="drift absolute -top-8 -right-6 text-8xl opacity-15">🌻</div>
         <div
@@ -164,7 +175,12 @@ function HomePage() {
             a cozy corner just for two
             {weather && (
               <span className="flex items-center gap-1 text-muted-foreground/70">
-                · <WeatherIcon condition={weather.condition} className="h-5 w-5" />
+                ·{" "}
+                <WeatherIcon
+                  condition={weather.condition}
+                  isDay={weather.isDay}
+                  className="h-5 w-5"
+                />
                 {Math.round(weather.tempC)}°
                 <span className="hidden sm:inline">
                   {WEATHER_LABEL[weather.condition]} in {weather.city}
@@ -180,6 +196,7 @@ function HomePage() {
               countdownDate={settings.countdown_date}
               countdownLabel={settings.countdown_label}
             />
+            <StreakBadge streak={streak} />
           </div>
           <div className="flex items-center gap-2">
             <Link

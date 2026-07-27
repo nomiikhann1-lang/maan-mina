@@ -157,6 +157,7 @@ export type Database = {
       };
       custom_stickers: {
         Row: {
+          assigned_to: string;
           created_at: string;
           id: string;
           image_url: string;
@@ -164,6 +165,7 @@ export type Database = {
           uploader_id: string;
         };
         Insert: {
+          assigned_to: string;
           created_at?: string;
           id?: string;
           image_url: string;
@@ -171,11 +173,42 @@ export type Database = {
           uploader_id: string;
         };
         Update: {
+          assigned_to?: string;
           created_at?: string;
           id?: string;
           image_url?: string;
           label?: string | null;
           uploader_id?: string;
+        };
+        Relationships: [];
+      };
+      bucket_list_items: {
+        Row: {
+          added_by: string;
+          completed: boolean;
+          completed_at: string | null;
+          completed_by: string | null;
+          created_at: string;
+          id: string;
+          text: string;
+        };
+        Insert: {
+          added_by: string;
+          completed?: boolean;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          id?: string;
+          text: string;
+        };
+        Update: {
+          added_by?: string;
+          completed?: boolean;
+          completed_at?: string | null;
+          completed_by?: string | null;
+          created_at?: string;
+          id?: string;
+          text?: string;
         };
         Relationships: [];
       };
@@ -214,6 +247,10 @@ export type Database = {
       };
       mark_messages_seen: {
         Args: { msg_ids: string[] };
+        Returns: undefined;
+      };
+      set_voice_transcript: {
+        Args: { msg_id: string; transcript: string };
         Returns: undefined;
       };
     };

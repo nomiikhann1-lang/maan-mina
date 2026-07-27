@@ -2,14 +2,16 @@ import type { WeatherCondition } from "@/lib/weather";
 
 export function WeatherIcon({
   condition,
+  isDay = true,
   className,
 }: {
   condition: WeatherCondition;
+  isDay?: boolean;
   className?: string;
 }) {
   return (
     <svg viewBox="0 0 48 48" className={className}>
-      {condition === "clear" && (
+      {condition === "clear" && isDay && (
         <g>
           <g style={{ transformOrigin: "24px 24px", animation: "spin-slow 16s linear infinite" }}>
             {[0, 45, 90, 135, 180, 225, 270, 315].map((a) => (
@@ -30,12 +32,37 @@ export function WeatherIcon({
         </g>
       )}
 
+      {condition === "clear" && !isDay && (
+        <g>
+          <path d="M30 12a13 13 0 1 0 11 18 10 10 0 0 1-11-18z" fill="#DCC96A" />
+          {[
+            [12, 14, 2.2],
+            [38, 30, 1.6],
+            [10, 30, 1.4],
+          ].map(([cx, cy, r], i) => (
+            <circle
+              key={i}
+              cx={cx}
+              cy={cy}
+              r={r}
+              fill="#F5EFC9"
+              className="float-slow"
+              style={{ animationDuration: `${3 + i}s`, animationDelay: `${-i}s` }}
+            />
+          ))}
+        </g>
+      )}
+
       {condition === "clouds" && (
         <g>
-          <circle cx="24" cy="20" r="7" fill="#F6C945" opacity="0.7" />
+          {isDay ? (
+            <circle cx="24" cy="20" r="7" fill="#F6C945" opacity="0.7" />
+          ) : (
+            <path d="M28 14a8 8 0 1 0 6 11 6 6 0 0 1-6-11z" fill="#DCC96A" opacity="0.6" />
+          )}
           <g className="drift" style={{ animationDuration: "10s" }}>
-            <ellipse cx="20" cy="27" rx="12" ry="8" fill="#F5EFE2" />
-            <ellipse cx="30" cy="25" rx="9" ry="7" fill="#EDE4D0" />
+            <ellipse cx="20" cy="27" rx="12" ry="8" fill={isDay ? "#F5EFE2" : "#8C93A8"} />
+            <ellipse cx="30" cy="25" rx="9" ry="7" fill={isDay ? "#EDE4D0" : "#767E96"} />
           </g>
         </g>
       )}

@@ -3,6 +3,7 @@ import { useCallback, useEffect, useMemo, useRef, useState, type FormEvent } fro
 import { supabase } from "@/integrations/supabase/client";
 import { greetingFor } from "@/lib/greeting";
 import { compressImage, extensionForMime, uploadChatMedia } from "@/lib/media";
+import { normalizeToWav } from "@/lib/audioNormalize";
 import { previewForMessage } from "@/lib/messagePreview";
 import { formatClockTime, formatRelativeTime } from "@/lib/time";
 import { useVisualViewport } from "@/hooks/useVisualViewportHeight";
@@ -17,6 +18,7 @@ import { MessageTicks } from "@/components/chat/MessageTicks";
 import { ReactionBadges, ReactionPickerBar, type Reaction } from "@/components/chat/Reactions";
 import { VoiceRecorderButton } from "@/components/chat/VoiceRecorder";
 import { VoicePlayer } from "@/components/chat/VoicePlayer";
+import { VoiceTranscript } from "@/components/chat/VoiceTranscript";
 import { VideoRecorderButton } from "@/components/chat/VideoRecorder";
 import { QuotedPreview, ReplyComposerBar, type QuotedMessage } from "@/components/chat/Reply";
 import { StickerArt, type StickerId } from "@/lib/stickers";
@@ -53,6 +55,7 @@ type Message = {
     prompt?: boolean;
     prompt_text?: string;
     kind?: string;
+    transcript?: string;
   } | null;
   delivered_at: string | null;
   seen_at: string | null;
@@ -87,7 +90,7 @@ function ChatPage() {
   const [replyingTo, setReplyingTo] = useState<QuotedMessage | null>(null);
   const [highlightId, setHighlightId] = useState<string | null>(null);
   const [customStickerRows, setCustomStickerRows] = useState<
-    { id: string; image_url: string; label: string | null; uploader_id: string }[]
+    { id: string; image_url: string; label: string | null; assigned_to: string }[]
   >([]);
   const [showJumpToBottom, setShowJumpToBottom] = useState(false);
   const [unseenCount, setUnseenCount] = useState(0);
@@ -121,16 +124,13 @@ function ChatPage() {
   const messageById = useMemo(() => new Map(messages.map((m) => [m.id, m])), [messages]);
   const customStickers: CustomSticker[] = useMemo(
     () =>
-      customStickerRows.map((s) => {
-        const name = (profiles[s.uploader_id]?.display_name ?? "").toLowerCase();
-        const ownerName: CustomSticker["ownerName"] = name.includes("maan")
-          ? "Maan"
-          : name.includes("mina")
-            ? "Mina"
-            : "Ours";
-        return { id: s.id, image_url: s.image_url, label: s.label, ownerName };
-      }),
-    [customStickerRows, profiles],
+      customStickerRows.map((s) => ({
+        id: s.id,
+        image_url: s.image_url,
+        label: s.label,
+        ownerName: s.assigned_to === "maan" ? "Maan" : "Mina",
+      })),
+    [customStickerRows],
   );
 
   function focusInput() {
@@ -167,7 +167,7 @@ function ChatPage() {
     async function loadCustomStickers() {
       const { data } = await supabase
         .from("custom_stickers")
-        .select("id, image_url, label, uploader_id")
+        .select("id, image_url, label, assigned_to")
         .order("created_at", { ascending: false });
       setCustomStickerRows(data ?? []);
     }
@@ -518,8 +518,9 @@ function ChatPage() {
     setUploadError(null);
     setUploadBusy(true);
     try {
-      const ext = extensionForMime(blob.type, "webm");
-      const url = await uploadChatMedia(blob, user.id, ext);
+      const wav = await normalizeToWav(blob);
+      const ext = extensionForMime(wav.type || "audio/wav", "wav");
+      const url = await uploadChatMedia(wav, user.id, ext);
       await insertMessage({
         content: `🎤 Voice note (${seconds}s)`,
         type: "voice",
@@ -628,7 +629,7 @@ function ChatPage() {
         transform: offsetTop ? `translateY(${offsetTop}px)` : undefined,
       }}
     >
-      <WeatherOverlay condition={weather?.condition ?? null} />
+      <WeatherOverlay condition={weather?.condition ?? null} isDay={weather?.isDay ?? true} />
       <div aria-hidden className="pointer-events-none absolute inset-0 select-none overflow-hidden">
         <div className="drift absolute -top-8 -right-6 text-8xl opacity-15">🌻</div>
         <div
@@ -1247,11 +1248,19 @@ function Bubble({
         )}
 
         {message.type === "voice" && message.media_url && (
-          <VoicePlayer
-            src={message.media_url}
-            mine={mine}
-            durationSeconds={message.media_meta?.duration_seconds ?? 0}
-          />
+          <>
+            <VoicePlayer
+              src={message.media_url}
+              mine={mine}
+              durationSeconds={message.media_meta?.duration_seconds ?? 0}
+            />
+            <VoiceTranscript
+              messageId={message.id}
+              audioUrl={message.media_url}
+              existing={message.media_meta?.transcript}
+              mine={mine}
+            />
+          </>
         )}
 
         {isSong && message.media_meta?.embed_url && message.media_meta.provider && (

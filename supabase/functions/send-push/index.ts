@@ -116,5 +116,7 @@ Deno.serve(async (req) => {
     await supabase.from("push_subscriptions").delete().in("endpoint", staleEndpoints);
   }
 
-  return new Response(JSON.stringify({ sent: subscriptions.length - staleEndpoints.length }), { status: 200 });
+  return new Response(JSON.stringify({ sent: subscriptions.length - staleEndpoints.length }), {
+    status: 200,
+  });
 });

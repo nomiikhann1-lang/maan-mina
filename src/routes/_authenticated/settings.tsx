@@ -22,7 +22,12 @@ export const Route = createFileRoute("/_authenticated/settings")({
 // Deployments tab for the commit it actually built).
 const APP_VERSION = "2026.07.23-1";
 
-type CustomSticker = { id: string; image_url: string; label: string | null; uploader_id: string };
+type CustomSticker = {
+  id: string;
+  image_url: string;
+  label: string | null;
+  assigned_to: "maan" | "mina";
+};
 
 function SettingsPage() {
   const { user } = Route.useRouteContext();
@@ -42,6 +47,13 @@ function SettingsPage() {
   const [stickerUploading, setStickerUploading] = useState(false);
   const [stickerError, setStickerError] = useState<string | null>(null);
   const [stickersExpanded, setStickersExpanded] = useState(false);
+  const [newStickerTarget, setNewStickerTarget] = useState<"maan" | "mina">(() => {
+    try {
+      return (localStorage.getItem("last_sticker_target") as "maan" | "mina") ?? "maan";
+    } catch {
+      return "maan";
+    }
+  });
   const stickerInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -69,7 +81,7 @@ function SettingsPage() {
   async function refreshStickers() {
     const { data } = await supabase
       .from("custom_stickers")
-      .select("id, image_url, label, uploader_id")
+      .select("id, image_url, label, assigned_to")
       .order("created_at", { ascending: false });
     setStickers((data as CustomSticker[]) ?? []);
     setStickersLoaded(true);
@@ -115,8 +127,13 @@ function SettingsPage() {
       const url = await uploadCustomSticker(compressed, user.id, ext);
       const { error } = await supabase
         .from("custom_stickers")
-        .insert({ uploader_id: user.id, image_url: url });
+        .insert({ uploader_id: user.id, image_url: url, assigned_to: newStickerTarget });
       if (error) throw error;
+      try {
+        localStorage.setItem("last_sticker_target", newStickerTarget);
+      } catch {
+        // not critical — just won't remember the choice next time
+      }
       void refreshStickers();
     } catch (err) {
       setStickerError(err instanceof Error ? err.message : "Couldn't add that sticker.");
@@ -162,6 +179,13 @@ function SettingsPage() {
             className="flex items-center justify-between border-t border-border/60 px-4 py-4 transition-colors hover:bg-secondary/60"
           >
             <span className="text-sm font-medium text-foreground">Our playlist</span>
+            <ChevronIcon />
+          </Link>
+          <Link
+            to="/bucket-list"
+            className="flex items-center justify-between border-t border-border/60 px-4 py-4 transition-colors hover:bg-secondary/60"
+          >
+            <span className="text-sm font-medium text-foreground">Our bucket list</span>
             <ChevronIcon />
           </Link>
         </div>
@@ -298,6 +322,25 @@ function SettingsPage() {
                 className="hidden"
                 onChange={handleStickerUpload}
               />
+              <div className="mb-3 flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Add to:</span>
+                <div className="flex overflow-hidden rounded-full border border-border">
+                  {(["maan", "mina"] as const).map((target) => (
+                    <button
+                      key={target}
+                      type="button"
+                      onClick={() => setNewStickerTarget(target)}
+                      className={`px-3 py-1 text-xs font-semibold capitalize transition-colors ${
+                        newStickerTarget === target
+                          ? "bg-primary text-primary-foreground"
+                          : "text-muted-foreground hover:bg-secondary"
+                      }`}
+                    >
+                      {target}
+                    </button>
+                  ))}
+                </div>
+              </div>
               {!stickersLoaded ? (
                 <div className="text-xs text-muted-foreground">Loading…</div>
               ) : (
@@ -312,23 +355,24 @@ function SettingsPage() {
                         alt={s.label ?? ""}
                         className="h-full w-full object-cover"
                       />
-                      {s.uploader_id === user.id && (
-                        <button
-                          type="button"
-                          onClick={() => deleteSticker(s.id)}
-                          aria-label="Remove sticker"
-                          className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
-                        >
-                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
-                            <path
-                              d="M6 6l12 12M18 6L6 18"
-                              stroke="currentColor"
-                              strokeWidth="2.5"
-                              strokeLinecap="round"
-                            />
-                          </svg>
-                        </button>
-                      )}
+                      <span className="absolute bottom-1 left-1 rounded-full bg-black/60 px-1.5 py-0.5 text-[9px] font-semibold capitalize text-white">
+                        {s.assigned_to}
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => deleteSticker(s.id)}
+                        aria-label="Remove sticker"
+                        className="absolute right-1 top-1 grid h-5 w-5 place-items-center rounded-full bg-black/60 text-white opacity-0 transition-opacity group-hover:opacity-100"
+                      >
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none">
+                          <path
+                            d="M6 6l12 12M18 6L6 18"
+                            stroke="currentColor"
+                            strokeWidth="2.5"
+                            strokeLinecap="round"
+                          />
+                        </svg>
+                      </button>
                     </div>
                   ))}
                   <button

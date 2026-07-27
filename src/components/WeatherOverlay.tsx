@@ -1,6 +1,12 @@
 import type { WeatherCondition } from "@/lib/weather";
 
-export function WeatherOverlay({ condition }: { condition: WeatherCondition | null }) {
+export function WeatherOverlay({
+  condition,
+  isDay = true,
+}: {
+  condition: WeatherCondition | null;
+  isDay?: boolean;
+}) {
   if (!condition) return null;
 
   if (condition === "rain") {
@@ -41,6 +47,29 @@ export function WeatherOverlay({ condition }: { condition: WeatherCondition | nu
   }
 
   if (condition === "clear") {
+    if (!isDay) {
+      return (
+        <div
+          aria-hidden
+          className="pointer-events-none absolute inset-0 overflow-hidden opacity-25"
+        >
+          {Array.from({ length: 16 }).map((_, i) => (
+            <span
+              key={i}
+              className="float-slow absolute rounded-full bg-amber-100"
+              style={{
+                left: `${(i * 61) % 100}%`,
+                top: `${(i * 37) % 60}%`,
+                width: `${1 + (i % 3)}px`,
+                height: `${1 + (i % 3)}px`,
+                animationDuration: `${3 + (i % 4)}s`,
+                animationDelay: `${-(i % 5)}s`,
+              }}
+            />
+          ))}
+        </div>
+      );
+    }
     return (
       <div
         aria-hidden

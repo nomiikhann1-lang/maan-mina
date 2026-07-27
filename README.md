@@ -232,3 +232,39 @@ Run `supabase/migrations/20260722090000_surprise_type.sql` (after the four earli
 
 ### Honest scope note
 Weather-sync is the one feature here that depends on a third-party API key from you, same situation as the earlier VAPID push keys — I can't provision that on your behalf. Everything else in this batch works out of the box with just the one new migration.
+
+## Sixth pass — iPhone voice fix, weather correction, bucket list, streaks, transcription
+
+### New migration
+Run `supabase/migrations/20260726090000_bucket_list_transcription.sql` after the one from last round.
+
+### iPhone voice notes — real bug, now fixed
+Safari cannot play WebM audio at all, on any iOS version, ever — it's a hard platform limitation, not a settings issue. Chrome/Android records voice notes as WebM by default, so any voice note recorded on Android or desktop was completely silent for an iPhone listener. Fixed by always normalizing every recording to plain WAV before upload (`src/lib/audioNormalize.ts`) — every browser, including every version of Safari, can always play WAV. Trade-off: voice notes are now larger files (uncompressed audio), which is a reasonable cost for short clips in exchange for actually working everywhere.
+
+If it's *still* silent after this on a specific iPhone: check the physical mute/ring switch and Focus mode — iOS Safari respects that switch for audio-only playback by default, which is a real platform behavior, not a bug in the app.
+
+### Weather — corrected + now dynamic
+- Fixed the locations: **Maan → Bin Qasim Town, Karachi**, **Mina → DHA, Islamabad** (previous version had these reversed/generic). Coordinates are my best estimate for these specific neighborhoods, not a live geocoding lookup — close, not necessarily pinpoint-exact.
+- Fixed "sunny at night" — added real day/night awareness (Open-Meteo's `is_day` field). Clear nights now show a moon-and-stars icon and a subtle starfield background instead of a bright daytime sun.
+- Fixed staleness — weather now refreshes every 20 minutes automatically instead of being fetched once and cached for the whole session, so it actually tracks real conditions through the day.
+
+### New features
+- **Bucket list** (Settings → "Our bucket list", or `/bucket-list`) — a shared checklist you both add to and check off together, separate from chat.
+- **Streak counter** — a 🔥 badge on the home screen showing consecutive days you've messaged. Doesn't break if today hasn't had a message yet (the day isn't over), only breaks on an actual missed day.
+- **Voice transcription in Roman Urdu** — tap "Transcribe" under any voice note. Uses OpenAI's Whisper for speech-to-text, then a second pass to transliterate into casual Roman Urdu the way it's actually typed while texting, not formal Urdu script.
+
+### Setting up transcription (needs an OpenAI API key)
+This is another piece that needs a real backend + a key from you, same pattern as the push notifications and (previously) weather setup:
+
+1. Get an API key at platform.openai.com (pay-as-you-go; transcribing short voice notes is cheap — a fraction of a cent each).
+2. Deploy the function:
+   ```bash
+   supabase functions deploy transcribe-voice
+   ```
+3. Set the secret:
+   ```bash
+   supabase secrets set OPENAI_API_KEY="sk-..."
+   ```
+That's it — no webhook or dashboard step needed this time, since this function is called directly by the signed-in client, not by a database trigger.
+
+If you don't set this up, the "Transcribe" button will show a friendly error instead of crashing anything else.
