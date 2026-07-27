@@ -1,68 +1,95 @@
-// Supabase Edge Function: transcribe-voice
-//
-// Called directly from the chat client (a signed-in user tapping
-// "Transcribe" on a voice note) — not a database webhook, so this uses
-// normal Supabase JWT verification (deploy WITHOUT --no-verify-jwt).
-//
-// Pipeline: fetch the voice note audio -> OpenAI Whisper transcribes it
-// (Urdu speech comes out in Urdu script) -> a cheap chat-completion pass
-// transliterates that into casual Roman Urdu, the way it's actually typed
-// in everyday texting, rather than the Urdu script.
-//
-// Deploy with:
-//   supabase functions deploy transcribe-voice
-//
-// Required secret:
-//   supabase secrets set OPENAI_API_KEY="sk-..."
+// Supabase Edge Function: transcribe-voice (OpenAI)
 
-const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY") ?? "";
+const corsHeaders = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
+};
 
 Deno.serve(async (req) => {
-  if (req.method !== "POST") {
-    return new Response("Method not allowed", { status: 405 });
+  if (req.method === "OPTIONS") {
+    return new Response("ok", { headers: corsHeaders });
   }
-  if (!OPENAI_API_KEY) {
-    return new Response(JSON.stringify({ error: "Transcription isn't configured yet." }), {
-      status: 500,
+
+  if (req.method !== "POST") {
+    return new Response("Method not allowed", {
+      status: 405,
+      headers: corsHeaders,
     });
+  }
+
+  const OPENAI_API_KEY = Deno.env.get("OPENAI_API_KEY");
+  if (!OPENAI_API_KEY) {
+    return new Response(
+      JSON.stringify({ error: "OpenAI API key isn't configured yet." }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   const authHeader = req.headers.get("Authorization");
   if (!authHeader) {
-    return new Response("Unauthorized", { status: 401 });
+    return new Response("Unauthorized", {
+      status: 401,
+      headers: corsHeaders,
+    });
   }
 
   const body = await req.json().catch(() => null);
   const audioUrl: string | undefined = body?.audio_url;
+
   if (!audioUrl) {
-    return new Response(JSON.stringify({ error: "Missing audio_url" }), { status: 400 });
+    return new Response(
+      JSON.stringify({ error: "Missing audio_url" }),
+      { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 
   try {
-    const audioRes = await fetch(audioUrl);
-    if (!audioRes.ok) throw new Error("Couldn't fetch the voice note");
+    // 1. Fetch the voice note (forward Authorization header in case the bucket is private)
+    const audioRes = await fetch(audioUrl, {
+      headers: authHeader ? { Authorization: authHeader } : {},
+    });
+
+    if (!audioRes.ok) {
+      console.error(`Failed to download audio from ${audioUrl}. Status: ${audioRes.status} ${audioRes.statusText}`);
+      throw new Error(`Couldn't fetch voice note (HTTP ${audioRes.status})`);
+    }
+
     const audioBlob = await audioRes.blob();
 
+    // 2. Send to OpenAI Whisper
     const form = new FormData();
-    form.append("file", audioBlob, "voice-note.wav");
+    const audioFile = new File([audioBlob], "voice-note.m4a", {
+      type: audioBlob.type || "audio/m4a",
+    });
+    form.append("file", audioFile);
     form.append("model", "whisper-1");
     form.append("language", "ur");
 
     const whisperRes = await fetch("https://api.openai.com/v1/audio/transcriptions", {
       method: "POST",
-      headers: { Authorization: `Bearer ${OPENAI_API_KEY}` },
+      headers: {
+        Authorization: `Bearer ${OPENAI_API_KEY}`,
+      },
       body: form,
     });
+
     if (!whisperRes.ok) {
       const errText = await whisperRes.text();
-      throw new Error(`Transcription failed: ${errText}`);
-    }
-    const whisperData = await whisperRes.json();
-    const rawText: string = whisperData?.text ?? "";
-    if (!rawText.trim()) {
-      return new Response(JSON.stringify({ transcript: "" }), { status: 200 });
+      console.error("Whisper Error:", errText);
+      throw new Error(`OpenAI Whisper failed: ${errText}`);
     }
 
+    const whisperData = await whisperRes.json();
+    const rawText: string = whisperData?.text ?? "";
+
+    if (!rawText.trim()) {
+      return new Response(
+        JSON.stringify({ transcript: "" }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
+    // 3. Transliterate to Roman Urdu via gpt-4o-mini
     const romanizeRes = await fetch("https://api.openai.com/v1/chat/completions", {
       method: "POST",
       headers: {
@@ -82,21 +109,26 @@ Deno.serve(async (req) => {
         ],
       }),
     });
+
     if (!romanizeRes.ok) {
       const errText = await romanizeRes.text();
-      throw new Error(`Transliteration failed: ${errText}`);
+      console.error("Transliteration Error:", errText);
+      throw new Error(`OpenAI Transliteration failed: ${errText}`);
     }
-    const romanizeData = await romanizeRes.json();
-    const transcript: string = romanizeData?.choices?.[0]?.message?.content?.trim() ?? rawText;
 
-    return new Response(JSON.stringify({ transcript }), {
-      status: 200,
-      headers: { "Content-Type": "application/json" },
-    });
-  } catch (err) {
+    const romanizeData = await romanizeRes.json();
+    const transcript: string =
+      romanizeData?.choices?.[0]?.message?.content?.trim() ?? rawText;
+
+    return new Response(
+      JSON.stringify({ transcript }),
+      { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
+  } catch (err: any) {
     console.error("transcribe-voice failed:", err);
-    return new Response(JSON.stringify({ error: "Couldn't transcribe that voice note." }), {
-      status: 500,
-    });
+    return new Response(
+      JSON.stringify({ error: err.message || "Couldn't transcribe that voice note." }),
+      { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+    );
   }
 });
