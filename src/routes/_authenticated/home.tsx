@@ -9,10 +9,10 @@ import { DaysTogetherWidget, UpcomingCountdownWidget } from "@/components/chat/C
 import { StreakBadge } from "@/components/chat/StreakBadge";
 import { computeStreak } from "@/lib/streak";
 import { PokeButtons } from "@/components/chat/PokeButtons";
-import { SunflowerGrowth, stageForCount } from "@/components/chat/SunflowerGrowth";
+import { SunflowerGrowth, growthPhase } from "@/components/chat/SunflowerGrowth";
 import { sendSurprise } from "@/lib/surprise";
 import { useWeather } from "@/hooks/useWeather";
-import { WEATHER_LABEL } from "@/lib/weather";
+import { partnerEmailFor, WEATHER_LABEL } from "@/lib/weather";
 import { WeatherIcon } from "@/components/WeatherIcon";
 import { WeatherOverlay } from "@/components/WeatherOverlay";
 
@@ -35,25 +35,17 @@ type LastMessage = {
   media_meta: { urls?: string[] } | null;
 };
 
-function startOfWeekIso(): string {
-  const now = new Date();
-  const day = now.getDay(); // 0 = Sunday
-  const diffToMonday = (day + 6) % 7;
-  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
-  return monday.toISOString();
-}
-
 function HomePage() {
   const { user } = Route.useRouteContext();
   const { settings } = useCoupleSettings();
-  const weather = useWeather(user.email);
+  const weather = useWeather(partnerEmailFor(user.email));
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [lastMessage, setLastMessage] = useState<LastMessage | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [weeklyCount, setWeeklyCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
   const [streak, setStreak] = useState(0);
   const [growthJustGrew, setGrowthJustGrew] = useState(false);
-  const prevStageRef = useRef<number | null>(null);
+  const prevPhaseRef = useRef<string | null>(null);
   const tapTimesRef = useRef<number[]>([]);
   const [surpriseSent, setSurpriseSent] = useState(false);
 
@@ -72,10 +64,9 @@ function HomePage() {
         .select("content, type, created_at, sender_id, media_meta")
         .order("created_at", { ascending: false })
         .limit(1),
-      supabase
-        .from("messages")
-        .select("id", { count: "exact", head: true })
-        .gte("created_at", startOfWeekIso()),
+      // Lifetime total — the growth widget is a cumulative, never-resetting
+      // counter now, not a weekly one.
+      supabase.from("messages").select("id", { count: "exact", head: true }),
       supabase
         .from("messages")
         .select("created_at")
@@ -83,7 +74,7 @@ function HomePage() {
     ]);
     setProfiles(Object.fromEntries((profs ?? []).map((p) => [p.id, p as Profile])));
     setLastMessage((msgs && (msgs[0] as LastMessage)) ?? null);
-    setWeeklyCount(count ?? 0);
+    setTotalCount(count ?? 0);
     setStreak(computeStreak((recentDays ?? []).map((r) => r.created_at)));
     setLoaded(true);
   }
@@ -104,13 +95,13 @@ function HomePage() {
   }, []);
 
   useEffect(() => {
-    const stage = stageForCount(weeklyCount);
-    if (prevStageRef.current !== null && stage > prevStageRef.current) {
+    const phase = growthPhase(totalCount);
+    if (prevPhaseRef.current !== null && phase !== prevPhaseRef.current) {
       setGrowthJustGrew(true);
       window.setTimeout(() => setGrowthJustGrew(false), 700);
     }
-    prevStageRef.current = stage;
-  }, [weeklyCount]);
+    prevPhaseRef.current = phase;
+  }, [totalCount]);
 
   async function sendPoke(content: string) {
     await supabase.from("messages").insert({ sender_id: user.id, content, type: "text" });
@@ -183,7 +174,8 @@ function HomePage() {
                 />
                 {Math.round(weather.tempC)}°
                 <span className="hidden sm:inline">
-                  {WEATHER_LABEL[weather.condition]} in {weather.city}
+                  {WEATHER_LABEL[weather.condition]}
+                  {other?.display_name ? ` for ${other.display_name}` : ""}
                 </span>
               </span>
             )}
@@ -217,11 +209,28 @@ function HomePage() {
         </div>
       </header>
 
-      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-4 px-6">
+      <div className="relative z-10 flex flex-1 flex-col items-center justify-center gap-5 px-6 py-4">
         {!loaded ? (
           <div className="float-slow text-4xl">🌻</div>
         ) : (
           <>
+            {/* Hero: the growth widget is the centerpiece now — bigger and
+                front-and-center, since it's the one thing that visibly
+                represents your whole history together growing over time. */}
+            <div className="relative">
+              <SunflowerGrowth
+                totalCount={totalCount}
+                justGrew={growthJustGrew}
+                onTap={handleGrowthTap}
+                size="h-28 w-28"
+              />
+              {surpriseSent && (
+                <span className="pop-in absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-petal">
+                  Surprise sent 💫
+                </span>
+              )}
+            </div>
+
             <Link
               to="/chat"
               className="pop-in group w-full max-w-sm rounded-3xl border border-border/70 bg-card/90 p-6 text-left shadow-soft backdrop-blur transition-transform hover:scale-[1.02]"
@@ -243,19 +252,6 @@ function HomePage() {
               </div>
             </Link>
 
-            <div className="relative">
-              <SunflowerGrowth
-                weeklyCount={weeklyCount}
-                justGrew={growthJustGrew}
-                onTap={handleGrowthTap}
-              />
-              {surpriseSent && (
-                <span className="pop-in absolute -top-2 left-1/2 -translate-x-1/2 -translate-y-full whitespace-nowrap rounded-full bg-primary px-3 py-1 text-[10px] font-semibold text-primary-foreground shadow-petal">
-                  Surprise sent 💫
-                </span>
-              )}
-            </div>
-
             <div className="w-full max-w-sm">
               <PokeButtons onSend={sendPoke} />
             </div>
@@ -263,7 +259,7 @@ function HomePage() {
         )}
       </div>
 
-      <div className="safe-bottom relative z-10 pb-10 text-center text-xs text-muted-foreground">
+      <div className="safe-bottom relative z-10 pb-8 text-center text-xs text-muted-foreground">
         Every message blooms with love 🌻
       </div>
     </div>

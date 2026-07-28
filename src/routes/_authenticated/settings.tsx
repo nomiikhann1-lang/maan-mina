@@ -425,15 +425,11 @@ function ToggleSwitch({
       onClick={onClick}
       disabled={disabled}
       aria-pressed={checked}
-      className={`relative h-7 w-12 shrink-0 rounded-full transition-colors disabled:opacity-40 ${
-        checked ? "bg-primary" : "bg-secondary"
+      className={`flex h-7 w-12 shrink-0 items-center rounded-full p-0.5 transition-colors disabled:opacity-40 ${
+        checked ? "justify-end bg-primary" : "justify-start bg-secondary"
       }`}
     >
-      <span
-        className={`absolute top-0.5 h-6 w-6 rounded-full bg-white shadow transition-transform ${
-          checked ? "translate-x-[22px]" : "translate-x-[2px]"
-        }`}
-      />
+      <span className="h-6 w-6 shrink-0 rounded-full bg-white shadow" />
     </button>
   );
 }

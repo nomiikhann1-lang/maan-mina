@@ -18,13 +18,13 @@ import { MessageTicks } from "@/components/chat/MessageTicks";
 import { ReactionBadges, ReactionPickerBar, type Reaction } from "@/components/chat/Reactions";
 import { VoiceRecorderButton } from "@/components/chat/VoiceRecorder";
 import { VoicePlayer } from "@/components/chat/VoicePlayer";
-import { VoiceTranscript } from "@/components/chat/VoiceTranscript";
 import { VideoRecorderButton } from "@/components/chat/VideoRecorder";
 import { QuotedPreview, ReplyComposerBar, type QuotedMessage } from "@/components/chat/Reply";
 import { StickerArt, type StickerId } from "@/lib/stickers";
 import { detectSongUrl, type SongProvider } from "@/lib/songs";
 import { SongCard } from "@/components/chat/SongCard";
 import { useWeather } from "@/hooks/useWeather";
+import { partnerEmailFor } from "@/lib/weather";
 import { WeatherOverlay } from "@/components/WeatherOverlay";
 import { playReceivedChime, playSentChime } from "@/lib/sound";
 import { getTodaysPrompt, todaysPromptDismissedKey } from "@/lib/dailyPrompts";
@@ -55,7 +55,6 @@ type Message = {
     prompt?: boolean;
     prompt_text?: string;
     kind?: string;
-    transcript?: string;
   } | null;
   delivered_at: string | null;
   seen_at: string | null;
@@ -103,7 +102,7 @@ function ChatPage() {
     }
   });
   const todaysPrompt = useMemo(() => getTodaysPrompt(), []);
-  const weather = useWeather(user.email);
+  const weather = useWeather(partnerEmailFor(user.email));
   const knownMessageIdsRef = useRef<Set<string>>(new Set());
 
   const scrollerRef = useRef<HTMLDivElement>(null);
@@ -1248,19 +1247,11 @@ function Bubble({
         )}
 
         {message.type === "voice" && message.media_url && (
-          <>
-            <VoicePlayer
-              src={message.media_url}
-              mine={mine}
-              durationSeconds={message.media_meta?.duration_seconds ?? 0}
-            />
-            <VoiceTranscript
-              messageId={message.id}
-              audioUrl={message.media_url}
-              existing={message.media_meta?.transcript}
-              mine={mine}
-            />
-          </>
+          <VoicePlayer
+            src={message.media_url}
+            mine={mine}
+            durationSeconds={message.media_meta?.duration_seconds ?? 0}
+          />
         )}
 
         {isSong && message.media_meta?.embed_url && message.media_meta.provider && (

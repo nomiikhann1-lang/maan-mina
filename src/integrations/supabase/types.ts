@@ -249,10 +249,6 @@ export type Database = {
         Args: { msg_ids: string[] };
         Returns: undefined;
       };
-      set_voice_transcript: {
-        Args: { msg_id: string; transcript: string };
-        Returns: undefined;
-      };
     };
     Enums: {
       [_ in never]: never;

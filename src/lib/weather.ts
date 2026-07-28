@@ -42,6 +42,13 @@ export function cityForEmail(email: string | null | undefined) {
   return CITY_BY_EMAIL[email.trim().toLowerCase()] ?? null;
 }
 
+/** The app is fixed to these two accounts, so "the other one" is a simple lookup. */
+export function partnerEmailFor(email: string | null | undefined): string | null {
+  const known = Object.keys(CITY_BY_EMAIL);
+  const self = (email ?? "").trim().toLowerCase();
+  return known.find((e) => e !== self) ?? null;
+}
+
 /**
  * Open-Meteo — free, no API key, no signup. Returns null on any failure;
  * this is pure ambiance, so it should never surface an error to the user.

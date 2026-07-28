@@ -268,3 +268,18 @@ This is another piece that needs a real backend + a key from you, same pattern a
 That's it — no webhook or dashboard step needed this time, since this function is called directly by the signed-in client, not by a database trigger.
 
 If you don't set this up, the "Transcribe" button will show a friendly error instead of crashing anything else.
+
+## Seventh pass — removed transcription, growth mechanic rework, privacy fix, layout fix
+
+### New migration
+Run `supabase/migrations/20260728110000_remove_transcription.sql`. Safe to run even if you never ran the transcription migration — it uses `IF EXISTS`.
+
+### Removed
+- **Voice transcription** — gone entirely: the button, the component, the edge function, the database function. If you already deployed `transcribe-voice`, you can also delete it from Supabase (Dashboard → Edge Functions), though leaving it deployed and unused is harmless.
+
+### Fixed
+- **Sunflower growth mechanic redesigned** — it's now a cumulative, never-resetting counter (not weekly): seed → sprout → bud through your first 99 messages together, then blooms at exactly 100 with 1 petal, gaining a petal every additional 100 messages, capping at a full 8-petal bloom at 800+. Also made much bigger and moved to the top of the home screen as the centerpiece — it's the thing that visibly represents your whole history together, so it's front and center now, not tucked into a small card.
+- **Weather now shows your partner's sky, not your own** — the whole point was knowing how it is where they are; showing your own local weather back to you wasn't useful. Also removed the location name text entirely (it was showing on wider screens, e.g. desktop) — the badge now shows just condition + temperature + your partner's name, never the neighborhood or city.
+- **Settings toggle switches rebuilt** — replaced the absolute-positioned thumb (which used a fixed pixel offset) with a flexbox-based one that repositions via alignment instead of a magic number, so the toggle physically cannot render outside its own track regardless of device quirks. If it's still visually cut off on your device after this, a screenshot showing the exact phone/browser would help me chase down whatever's specific to that device.
+
+If the day/night weather icon still doesn't look right after this, it's worth checking whose account you're testing from — the fix above means you now see your *partner's* sky, so you need to check the actual local time on their end, not yours.
