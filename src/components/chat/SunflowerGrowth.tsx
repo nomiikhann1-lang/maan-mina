@@ -1,23 +1,25 @@
 export type GrowthPhase = "seed" | "sprout" | "bud" | "bloom";
 
-/** Before 100 total messages: seed → sprout → bud. At 100+: blooming. */
-export function growthPhase(total: number): GrowthPhase {
-  if (total < 100) {
-    if (total < 34) return "seed";
-    if (total < 67) return "sprout";
+/** Messages needed for the first bloom, and per additional petal after that. */
+const PETAL_INTERVAL = 70;
+
+/** Before the interval: seed → sprout → bud. At the interval and beyond: blooming. */
+export function growthPhase(weeklyCount: number): GrowthPhase {
+  if (weeklyCount < PETAL_INTERVAL) {
+    if (weeklyCount < PETAL_INTERVAL / 3) return "seed";
+    if (weeklyCount < (PETAL_INTERVAL * 2) / 3) return "sprout";
     return "bud";
   }
   return "bloom";
 }
 
-/** 1 petal at 100 messages, +1 petal per additional 100, capped at a full 8-petal bloom. */
-export function bloomPetalCount(total: number): number {
-  return Math.max(1, Math.min(8, Math.floor(total / 100)));
+/** 1 petal at the interval, +1 petal per additional interval, capped at a full 8-petal bloom. */
+export function bloomPetalCount(weeklyCount: number): number {
+  return Math.max(1, Math.min(8, Math.floor(weeklyCount / PETAL_INTERVAL)));
 }
 
 /** The flower itself grows visually alongside the petal count. */
-function bloomScale(total: number): number {
-  const petals = bloomPetalCount(total);
+function scaleForPetals(petals: number): number {
   return 0.55 + ((petals - 1) * (1.35 - 0.55)) / 7;
 }
 
@@ -29,18 +31,18 @@ const PHASE_LABEL: Record<GrowthPhase, string> = {
 };
 
 export function SunflowerGrowth({
-  totalCount,
+  weeklyCount,
   justGrew,
   onTap,
   size = "h-14 w-14",
 }: {
-  totalCount: number;
+  weeklyCount: number;
   justGrew: boolean;
   onTap: () => void;
   size?: string;
 }) {
-  const phase = growthPhase(totalCount);
-  const petals = bloomPetalCount(totalCount);
+  const phase = growthPhase(weeklyCount);
+  const petals = bloomPetalCount(weeklyCount);
   const maxedOut = phase === "bloom" && petals >= 8;
 
   return (
@@ -58,15 +60,15 @@ export function SunflowerGrowth({
       </span>
       <span className="text-[10px] text-muted-foreground/70">
         {phase === "bloom"
-          ? `${petals} of 8 petals · ${totalCount} messages`
-          : `${totalCount} / 100 messages`}
+          ? `${petals} of 8 petals · ${weeklyCount} this week`
+          : `${weeklyCount} / ${PETAL_INTERVAL} this week`}
       </span>
     </button>
   );
 }
 
 function GrowthArt({ phase, petals }: { phase: GrowthPhase; petals: number }) {
-  const scale = phase === "bloom" ? bloomScale(petals * 100) : 1;
+  const scale = phase === "bloom" ? scaleForPetals(petals) : 1;
   return (
     <svg viewBox="0 0 64 64" className="h-full w-full overflow-visible">
       {/* soil */}

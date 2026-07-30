@@ -283,3 +283,21 @@ Run `supabase/migrations/20260728110000_remove_transcription.sql`. Safe to run e
 - **Settings toggle switches rebuilt** — replaced the absolute-positioned thumb (which used a fixed pixel offset) with a flexbox-based one that repositions via alignment instead of a magic number, so the toggle physically cannot render outside its own track regardless of device quirks. If it's still visually cut off on your device after this, a screenshot showing the exact phone/browser would help me chase down whatever's specific to that device.
 
 If the day/night weather icon still doesn't look right after this, it's worth checking whose account you're testing from — the fix above means you now see your *partner's* sky, so you need to check the actual local time on their end, not yours.
+
+## Eighth pass — growth mechanic tuned, real image viewer
+
+No new migration this round — everything here is client-side.
+
+### Sunflower growth — tuned per your numbers
+- Now resets every Monday (back to weekly, not lifetime) — 🔥 the streak counter stays cumulative, only the sunflower resets.
+- Blooms at 70 messages (was 100) — seed/sprout/bud thresholds scaled proportionally (0-23 / 24-46 / 47-69).
+- Gains a petal every additional 70 messages, capping at a full 8-petal bloom at 560 messages in a week. Verified the exact thresholds directly (70→1 petal, 140→2, 560→8, stays at 8 beyond that) rather than eyeballing it.
+
+### Image viewer — actually works like WhatsApp now
+The old one just closed on any tap, no zoom at all. Rebuilt from scratch:
+- **Pinch-to-zoom** — two-finger pinch in/out, up to 4x
+- **Double-tap to zoom** — taps to ~2.5x, taps again to reset
+- **Drag to pan** — once zoomed in, drag moves around the image; stays within bounds so you can't drag it off into empty space
+- **Single tap still closes** — but only when you're not zoomed in, so it doesn't fight with panning
+- Desktop mouse wheel also zooms, as a bonus for testing on a computer
+- Zoom/pan state fully resets when you swipe to the next/previous photo in a multi-photo message

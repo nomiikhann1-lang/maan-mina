@@ -35,6 +35,14 @@ type LastMessage = {
   media_meta: { urls?: string[] } | null;
 };
 
+function startOfWeekIso(): string {
+  const now = new Date();
+  const day = now.getDay(); // 0 = Sunday
+  const diffToMonday = (day + 6) % 7;
+  const monday = new Date(now.getFullYear(), now.getMonth(), now.getDate() - diffToMonday);
+  return monday.toISOString();
+}
+
 function HomePage() {
   const { user } = Route.useRouteContext();
   const { settings } = useCoupleSettings();
@@ -42,7 +50,7 @@ function HomePage() {
   const [profiles, setProfiles] = useState<Record<string, Profile>>({});
   const [lastMessage, setLastMessage] = useState<LastMessage | null>(null);
   const [loaded, setLoaded] = useState(false);
-  const [totalCount, setTotalCount] = useState(0);
+  const [weeklyCount, setWeeklyCount] = useState(0);
   const [streak, setStreak] = useState(0);
   const [growthJustGrew, setGrowthJustGrew] = useState(false);
   const prevPhaseRef = useRef<string | null>(null);
@@ -64,9 +72,12 @@ function HomePage() {
         .select("content, type, created_at, sender_id, media_meta")
         .order("created_at", { ascending: false })
         .limit(1),
-      // Lifetime total — the growth widget is a cumulative, never-resetting
-      // counter now, not a weekly one.
-      supabase.from("messages").select("id", { count: "exact", head: true }),
+      // Resets every Monday — the growth widget tracks messages sent this
+      // week, not a lifetime total.
+      supabase
+        .from("messages")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", startOfWeekIso()),
       supabase
         .from("messages")
         .select("created_at")
@@ -74,7 +85,7 @@ function HomePage() {
     ]);
     setProfiles(Object.fromEntries((profs ?? []).map((p) => [p.id, p as Profile])));
     setLastMessage((msgs && (msgs[0] as LastMessage)) ?? null);
-    setTotalCount(count ?? 0);
+    setWeeklyCount(count ?? 0);
     setStreak(computeStreak((recentDays ?? []).map((r) => r.created_at)));
     setLoaded(true);
   }
@@ -95,13 +106,13 @@ function HomePage() {
   }, []);
 
   useEffect(() => {
-    const phase = growthPhase(totalCount);
+    const phase = growthPhase(weeklyCount);
     if (prevPhaseRef.current !== null && phase !== prevPhaseRef.current) {
       setGrowthJustGrew(true);
       window.setTimeout(() => setGrowthJustGrew(false), 700);
     }
     prevPhaseRef.current = phase;
-  }, [totalCount]);
+  }, [weeklyCount]);
 
   async function sendPoke(content: string) {
     await supabase.from("messages").insert({ sender_id: user.id, content, type: "text" });
@@ -219,7 +230,7 @@ function HomePage() {
                 represents your whole history together growing over time. */}
             <div className="relative">
               <SunflowerGrowth
-                totalCount={totalCount}
+                weeklyCount={weeklyCount}
                 justGrew={growthJustGrew}
                 onTap={handleGrowthTap}
                 size="h-28 w-28"
